@@ -1,0 +1,132 @@
+
+ASA ↔ Router IPSec VPN Configuration Explanation
+
+---
+
+## 🔹 Objective
+Create a site-to-site IPSec VPN between an ASA firewall and a Cisco router so that:
+- ASA LAN (192.168.1.0/24) can communicate with Router LAN (172.16.3.0/24).
+- VPN traffic is encrypted and not NATed.
+- Both peers use pre-shared key authentication.
+
+---
+
+## 🔸 ASA Configuration Explained
+
+### 1. Enable IKEv1 on the Outside Interface
+crypto ikev1 enable outside
+This activates IKEv1 (Phase 1 negotiation) on the ASA’s outside interface.
+
+### 2. Define IKEv1 Policy (Phase 1 Parameters)
+crypto ikev1 policy 10
+ authentication pre-share
+ encryption 3des
+ hash sha
+ group 2
+This tells the ASA how to establish Phase 1:
+- Pre-shared key authentication.
+- 3DES for encryption.
+- SHA for hashing.
+- DH Group 2 for key exchange.
+The router must have the exact same settings or negotiation fails.
+
+### 3. Define IPSec Transform Set (Phase 2 Parameters)
+crypto ipsec ikev1 transform-set ESP-TUNNEL esp-3des esp-sha-hmac
+Defines how data will be encrypted once the tunnel is up:
+- ESP 3DES for encryption.
+- ESP SHA-HMAC for integrity.
+
+### 4. Define the Tunnel Group (Peer Information)
+tunnel-group 10.2.2.1 type ipsec-l2l
+tunnel-group 10.2.2.1 ipsec-attributes
+ ikev1 pre-shared-key SECRET-KEY
+Associates the ASA’s VPN peer (Router public IP = 10.2.2.1) with a tunnel-group and defines the pre-shared key.
+The IP here must match the router’s public IP.
+
+### 5. Create Crypto Map and Apply to Outside Interface
+crypto map S2S-MAP 10 set peer 10.2.2.1
+crypto map S2S-MAP 10 set ikev1 transform-set ESP-TUNNEL
+crypto map S2S-MAP 10 match address VPN-ACL
+crypto map S2S-MAP interface outside
+- S2S-MAP is the crypto policy applied to the ASA interface.
+- Tells ASA which peer to connect to and which ACL defines the “interesting traffic.”
+
+### 6. Define the VPN ACL
+access-list VPN-ACL extended permit ip 192.168.1.0 255.255.255.0 172.16.3.0 255.255.255.0
+Defines what traffic will be encrypted (the LAN-to-LAN traffic).
+
+### 7. NAT Exemption (Critical Part)
+object network inside-net
+ subnet 192.168.1.0 255.255.255.0
+
+object network remote-net
+ subnet 172.16.3.0 255.255.255.0
+
+nat (inside,outside) source static inside-net inside-net destination static remote-net remote-net no-proxy-arp
+Prevents NAT for traffic between inside LAN and remote LAN. Without this, ASA would NAT traffic to its public IP, and the VPN ACL would not match.
+
+### 8. Verification Commands
+show crypto ikev1 sa     # Phase 1 status
+show crypto ipsec sa      # Phase 2 status
+show nat                  # Verify NAT order and exemption
+
+---
+
+## 🔸 Router Configuration Explained
+
+### 1. Enable ISAKMP
+crypto isakmp enable
+Turns on IKE negotiation for IPSec.
+
+### 2. Define ISAKMP Policy (Phase 1)
+crypto isakmp policy 10
+ authentication pre-share
+ encryption 3des
+ hash sha
+ group 2
+Must match ASA’s Phase 1 settings exactly.
+
+### 3. Define IPSec Transform Set (Phase 2)
+crypto ipsec transform-set ESP-TUNNEL esp-3des esp-sha-hmac
+Must match ASA’s transform set.
+
+### 4. Define VPN ACL (Interesting Traffic)
+ip access-list extended VPN-ACL
+ permit ip 172.16.3.0 0.0.0.255 192.168.1.0 0.0.0.255
+Traffic from Router LAN to ASA LAN triggers the tunnel.
+
+### 5. Create Crypto Map and Apply It
+crypto map S2S-MAP 10 ipsec-isakmp
+ match address VPN-ACL
+ set peer 209.165.200.226
+ set transform-set ESP-TUNNEL
+
+interface Serial1/0
+ crypto map S2S-MAP
+Defines which traffic to encrypt, who to connect to (ASA’s public IP), and which transform set to use.
+
+### 6. Verification Commands
+show crypto isakmp sa   # Phase 1 status
+show crypto ipsec sa    # Phase 2 status
+
+---
+
+## 🔹 Summary of VPN Flow
+1. Host on 192.168.1.0 sends traffic to 172.16.3.0.
+2. ASA checks NAT — traffic matches exemption rule, so no NAT.
+3. Traffic matches VPN-ACL — triggers IPSec negotiation.
+4. ASA and router negotiate Phase 1 and 2.
+5. Encrypted IPSec tunnel forms.
+6. Both LANs can communicate securely.
+
+---
+
+## 🔸 Troubleshooting Checklist
+- If tunnel doesn’t form:
+  - `show crypto ikev1 sa` → Check for MM_ACTIVE.
+  - `show crypto ipsec sa` → Look for packets encrypt/decrypt.
+  - Verify NAT exemption exists and is above the dynamic NAT.
+  - Verify ACLs mirror each other (source/destination swapped correctly).
+  - Confirm pre-shared key matches.
+
+✅ Result: IPSec tunnel established successfully between ASA and router, with NAT properly excluded for VPN traffic and encryption working both directions.
