@@ -1,0 +1,28 @@
+DHCP Common Options for Cisco ASA
+
+Option | Purpose | Example
+---------------------------------------------
+1  | Subnet Mask               | dhcpd option 1 ip 255.255.255.0
+2  | Time Offset (from GMT)    | dhcpd option 2 hex ffffff00
+3  | Default Gateway (Router)  | dhcpd option 3 ip 192.168.1.1
+6  | DNS Servers               | dhcpd option 6 ip 8.8.8.8 8.8.4.4
+15 | Domain Name               | dhcpd option 15 ascii mydomain.local
+42 | NTP (Time) Servers        | dhcpd option 42 ip 192.168.1.10
+44 | WINS (NetBIOS Server)     | dhcpd option 44 ip 192.168.1.5
+46 | NetBIOS Node Type         | dhcpd option 46 hex 8
+51 | Lease Time (in seconds)   | dhcpd option 51 hex 00015180
+66 | TFTP Server Name          | dhcpd option 66 ascii 192.168.1.100
+67 | Bootfile Name             | dhcpd option 67 ascii pxelinux.0
+150| TFTP Server (Cisco IP Phones) | dhcpd option 150 ip 192.168.1.200
+
+Usage Format:
+--------------
+dhcpd option <option-number> <type> <value>
+
+Types can be: ip | ascii | hex
+
+Verification Commands:
+----------------------
+show dhcpd binding
+show dhcpd statistics
+show run dhcpd

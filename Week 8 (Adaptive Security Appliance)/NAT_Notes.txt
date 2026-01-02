@@ -1,0 +1,57 @@
+NAT (Network Address Translation) — Notes + Commands
+
+What NAT Does
+--------------
+NAT translates private IP addresses inside a LAN to a public IP (or pool of IPs) before traffic leaves the network.  
+It hides internal addresses and conserves public IPs.
+
+Types of NAT
+-------------
+Type           Description                                       Example
+Static NAT     One-to-one mapping between inside local and        One internal server mapped to a fixed public IP.
+               inside global address.
+Dynamic NAT    Uses a pool of public IPs; assigns them            Internal users share a pool of public IPs.
+               dynamically to internal hosts.
+PAT (Overload) Many internal hosts share a single public IP       Most common form used in home/enterprise networks.
+               using different port numbers.
+
+Basic NAT Configuration Steps
+------------------------------
+1. Define inside and outside interfaces:
+   R1(config)# interface g0/0
+   R1(config-if)# ip address 192.168.1.1 255.255.255.0
+   R1(config-if)# ip nat inside
+   R1(config-if)# exit
+
+   R1(config)# interface g0/1
+   R1(config-if)# ip address 203.0.113.1 255.255.255.0
+   R1(config-if)# ip nat outside
+
+2. Static NAT:
+   R1(config)# ip nat inside source static 192.168.1.10 203.0.113.10
+
+   Verify:
+   R1# show ip nat translations
+
+3. Dynamic NAT:
+   R1(config)# ip nat pool MYPOOL 203.0.113.20 203.0.113.30 netmask 255.255.255.0
+   R1(config)# access-list 1 permit 192.168.1.0 0.0.0.255
+   R1(config)# ip nat inside source list 1 pool MYPOOL
+
+4. PAT (Overload):
+   R1(config)# access-list 1 permit 192.168.1.0 0.0.0.255
+   R1(config)# ip nat inside source list 1 interface g0/1 overload
+
+Verification Commands
+----------------------
+   R1# show ip nat translations
+   R1# show ip nat statistics
+   R1# debug ip nat
+
+Quick Summary
+--------------
+- Static NAT = fixed mapping (1:1)
+- Dynamic NAT = uses a pool (many:many)
+- PAT = many-to-one using ports (common in real networks)
+- Always mark interfaces as inside or outside.
+- Use ACL to define which traffic gets translated.
